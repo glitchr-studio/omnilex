@@ -1,0 +1,33 @@
+# glitchr/omnilex with every source package, against the real services:
+#
+#   cp .env.dist .env                                         # the PISTE credentials, when you have them
+#   docker compose run --rm omnilex sources                   # which sources are installed and configured, what each does
+#   docker compose run --rm omnilex text eurlex 32016R0679 --at 2018-06-01
+#   docker compose run --rm omnilex article eurlex 32016R0679 17
+#   docker compose run --rm omnilex decision eurlex ECLI:EU:C:2014:317
+#   docker compose run --rm omnilex citations eurlex 32016R0679 --limit 10
+#   docker compose run --rm omnilex search administratif urbanisme --jurisdiction CE --from 2026-09-01
+#   docker compose run --rm omnilex recent administratif 2026-10-01 --jurisdiction CE
+#   docker compose run --rm omnilex article legifrance LEGITEXT000006070987 L36-11 --at 2018-01-01    # needs PISTE
+#   docker compose run --rm omnilex search judilibre expropriation --jurisdiction cc --from 2020-01-01  # needs PISTE
+#   docker compose run --rm omnilex test                      # every package's tests
+#
+# Sources come from GitHub (branch 1.x) unless their checkout sits under
+# OMNILEX_PLUGINS (set it to ../.. in .env when this core sits in the
+# workspace beside them): then that checkout is what runs.
+name: omnilex-harness
+
+services:
+  omnilex:
+    build: .
+    image: glitchr/omnilex-harness
+    env_file:
+      - path: .env
+        required: false
+    volumes:
+      - ..:/omnilex/core
+      - ${OMNILEX_PLUGINS:-./plugins}:/omnilex/plugins:ro
+      - harness:/harness
+
+volumes:
+  harness:
