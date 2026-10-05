@@ -37,7 +37,11 @@
         "omnilex/legifrance": "Légifrance (PISTE): codes, laws, decrees, the Journal officiel, as in force at a date",
         "omnilex/judilibre": "Judilibre (PISTE): the decisions of the Cour de cassation and of the judicial courts",
         "omnilex/eurlex": "EUR-Lex: EU law and the case law of the Court of Justice, from the Publications Office's open endpoint",
-        "omnilex/justice-administrative": "The open data of the Conseil d'État, the administrative courts of appeal and the administrative tribunals"
+        "omnilex/justice-administrative": "The open data of the Conseil d'État, the administrative courts of appeal and the administrative tribunals",
+        "symfony/cache": "In a Symfony application: the pool (cache.app) where Omnilex\\Bridge\\Symfony\\CacheTokenStore keeps the PISTE tokens",
+        "symfony/config": "In a Symfony application: the configuration of Omnilex\\Bridge\\Symfony\\OmnilexBundle",
+        "symfony/dependency-injection": "In a Symfony application: the services of Omnilex\\Bridge\\Symfony\\OmnilexBundle",
+        "symfony/http-kernel": "In a Symfony application: Omnilex\\Bridge\\Symfony\\OmnilexBundle itself"
     },
     "autoload": {
         "psr-4": {
