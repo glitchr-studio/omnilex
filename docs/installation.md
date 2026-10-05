@@ -5,8 +5,65 @@ composer require glitchr/omnilex omnilex/eurlex omnilex/justice-administrative
 composer require omnilex/legifrance omnilex/judilibre    # with a PISTE account
 ```
 
-PHP 8.2 or later. The core needs only `symfony/http-client-contracts`; each source package
-brings `symfony/http-client`.
+PHP 8.2 or later.
+
+Omnilex needs no framework. The core requires nothing but `symfony/http-client-contracts`, each
+source package `symfony/http-client`: two libraries that stand alone. It runs the same in plain
+PHP, in a worker, in Laravel or Slim, and in Symfony, where a bundle does the wiring
+([Symfony](symfony.md)).
+
+## Plain PHP
+
+```php
+<?php // bare.php
+
+require __DIR__.'/vendor/autoload.php';
+
+use Omnilex\Eurlex\EurlexSourceFactory;
+use Omnilex\Registry;
+use Symfony\Component\HttpClient\HttpClient;
+
+$http = HttpClient::create();
+$registry = new Registry([new EurlexSourceFactory($http)], [
+    'eurlex' => ['factory' => 'eurlex', 'options' => ['language' => 'fr']],
+]);
+
+// Article 17 of the General Data Protection Regulation, as in force on 1 June 2018
+$article = $registry->articles('eurlex')->article('32016R0679', '17', new DateTimeImmutable('2018-06-01'));
+
+echo $article->textTitle, "\n\n";
+echo 'Article ', $article->number, ' - ', $article->title, "\n";
+echo 'version ', $article->version->id, ', from ', $article->version->from->format('Y-m-d'), ', ', $article->version->status->value, "\n\n";
+echo strtok($article->content, "\n"), "\n";
+```
+
+```
+$ php bare.php
+Règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l'égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données) (Texte présentant de l'intérêt pour l'EEE)
+
+Article 17 - Droit à l'effacement («droit à l'oubli»)
+version 02016R0679-20160504, from 2016-05-04, in_force
+
+1. La personne concernée a le droit d'obtenir du responsable du traitement l'effacement, dans les meilleurs délais, de données à caractère personnel la concernant et le responsable du traitement a l'obligation d'effacer ces données à caractère personnel dans les meilleurs délais, lorsque l'un des motifs suivants s'applique:
+```
+
+(as answered on 2026-10-05)
+
+No key, no account: the script asks the Publications Office's open endpoint. That is all there is
+to it:
+
+- a **factory** per source package (`EurlexSourceFactory`, `JusticeAdministrativeSourceFactory`,
+  `LegifranceSourceFactory`, `JudilibreSourceFactory`), which takes the HTTP client to call with -
+  the application's, a `MockHttpClient` in a test; with none given it makes its own
+  (`HttpClient::create()`) - and, for the sources behind PISTE, a token store
+  ([authentication](authentication.md));
+- the **registry**, built by hand from the factories and the sources' options, by name;
+- the **sources** it gives, each as what it does: `articles()`, `texts()`, `decisions()`,
+  `search()`, `citations()`, `recent()`.
+
+No class of a framework is loaded on the way - a test of this package checks it in a process of
+its own (`Tests/BareTest.php`), and so does `docker compose run --rm omnilex bare`
+([harness](harness.md)).
 
 ## One source
 
@@ -60,6 +117,17 @@ $registry->reading(Scheme::ECLI);            // the sources that read an ECLI
 Nothing is built before a source is asked for: a registry whose PISTE credentials are missing
 still works for the other sources. `having()`, `reading()` and `usable()` leave out the sources
 whose options are incomplete; `get()` and `all()` refuse them (`InvalidConfigException`).
+
+## In a framework
+
+- **Symfony**: `Omnilex\Bridge\Symfony\OmnilexBundle` registers the factories on the
+  application's `http_client`, keeps the PISTE tokens in `cache.app`, builds the registry from
+  `config/packages/omnilex.yaml` and makes each source injectable by its name, as what it does:
+  see [Symfony](symfony.md). Its components (`symfony/config`, `symfony/dependency-injection`,
+  `symfony/http-kernel`, a cache pool) are not required by this package: a Symfony application
+  has them.
+- **Any other**: build the `Registry` once, where the framework builds its services (a service
+  provider, a container definition), as the script above does.
 
 ## A legal watch
 

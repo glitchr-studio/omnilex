@@ -23,8 +23,9 @@ This package holds the contract (`Source\*Interface`, `Source\SourceFactory`, `R
 models (`Text`, `Article`, `Version`, `Decision`, `Court`, `Citation`, `Reference`, `Query`,
 `Results`, `Capabilities`), the identifiers (`Identifier`: ECLI, CELEX, ELI, NOR, numéro de
 pourvoi, Légifrance's own - normalised and validated without the network), OAuth client
-credentials for PISTE (`Auth\ClientCredentials`) and the Symfony bundle. It requires nothing but
-`symfony/http-client-contracts`. Each source is a package of its own:
+credentials for PISTE (`Auth\ClientCredentials`) and a bridge for Symfony. It needs no framework:
+it requires nothing but `symfony/http-client-contracts`, each source package
+`symfony/http-client`. Each source is a package of its own:
 
 | Package | Source | Access |
 |---|---|---|
@@ -80,7 +81,37 @@ domain `shs.droit`); public registers (companies, VAT numbers) with `glitchr/omn
 - [Symfony](docs/symfony.md)
 - [The Docker harness](docs/harness.md)
 
+## Plain PHP
+
+```sh
+composer require glitchr/omnilex omnilex/eurlex omnilex/justice-administrative
+```
+
+```php
+use Omnilex\Eurlex\EurlexSourceFactory;
+use Omnilex\JusticeAdministrative\JusticeAdministrativeSourceFactory;
+use Omnilex\Registry;
+use Symfony\Component\HttpClient\HttpClient;
+
+$http = HttpClient::create();   // or the application's client; a MockHttpClient in a test
+$registry = new Registry([new EurlexSourceFactory($http), new JusticeAdministrativeSourceFactory($http)], [
+    'eurlex' => ['factory' => 'eurlex', 'options' => ['language' => 'fr']],
+    'administratif' => ['factory' => 'justice-administrative'],
+]);
+$eurlex = $registry->articles('eurlex');           // typed: an ArticleReaderInterface
+$administratif = $registry->recent('administratif');
+```
+
+No bundle, no container: a factory per source package, the registry built by hand.
+[docs/installation.md](docs/installation.md) opens on a whole script that runs as it is, against
+the real service.
+
 ## Symfony
+
+`Omnilex\Bridge\Symfony\OmnilexBundle` does that wiring in a Symfony application
+([docs/symfony.md](docs/symfony.md)); its components (`symfony/config`,
+`symfony/dependency-injection`, `symfony/http-kernel`, a cache pool for the PISTE tokens) are not
+required by this package.
 
 ```yaml
 omnilex:
@@ -102,6 +133,7 @@ cd docker && cp .env.dist .env
 docker compose run --rm omnilex sources
 docker compose run --rm omnilex text eurlex 32016R0679 --at 2018-06-01
 docker compose run --rm omnilex recent administratif 2026-10-01 --jurisdiction CE
+docker compose run --rm omnilex bare          # plain PHP: no bundle, no container, and what PHP loaded
 docker compose run --rm omnilex test
 ```
 
