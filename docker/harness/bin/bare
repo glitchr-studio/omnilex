@@ -1,0 +1,101 @@
+#!/usr/bin/env php
+<?php
+
+/**
+ * Omnilex in bare PHP: no bundle, no container, no console component. The
+ * registry is built by hand from the source packages installed, each source
+ * that can be built says what it does, then EUR-Lex is asked for the General
+ * Data Protection Regulation (CELEX 32016R0679) as in force on 1 June 2018 -
+ * the Publications Office's open endpoint, no key - and the script lists
+ * what PHP loaded on the way.
+ *
+ *   docker compose run --rm omnilex bare              # exits 1 when a class of a framework was loaded
+ *   docker compose run --rm omnilex bare --recorded   # the answers recorded on 2026-10-04 instead of the calls
+ *   docker compose run --rm omnilex bare --json       # the same, whole: every class and file loaded
+ *
+ * OMNILEX_AUTOLOAD names another autoloader than the harness's.
+ */
+
+use Omnilex\Model\Capabilities;
+use Omnilex\Model\Version;
+use Omnilex\Registry;
+use Symfony\Component\HttpClient\HttpClient;
+use Symfony\Component\HttpClient\MockHttpClient;
+use Symfony\Component\HttpClient\Response\MockResponse;
+
+require getenv('OMNILEX_AUTOLOAD') ?: '/harness/vendor/autoload.php';
+
+// The SPARQL endpoint's answers, recorded: the work behind 32016R0679, its consolidated versions; anything else is unknown.
+$recorded = \in_array('--recorded', $argv, true);
+$http = !$recorded ? null : new MockHttpClient(static function (string $method, string $url): MockResponse {
+    parse_str((string) parse_url($url, \PHP_URL_QUERY), $query);
+    $sparql = (string) ($query['query'] ?? '');
+    $answer = match (true) {
+        str_contains($sparql, 'act_consolidated_consolidates_resource_legal') => file_get_contents(__DIR__.'/../recorded/eurlex-versions-32016R0679.json'),
+        str_contains($sparql, 'cdm:resource_legal_id_celex "32016R0679"') => file_get_contents(__DIR__.'/../recorded/eurlex-work-32016R0679.json'),
+        default => '{"head": {"vars": []}, "results": {"bindings": []}}',
+    };
+
+    return new MockResponse((string) $answer, ['response_headers' => ['Content-Type: application/sparql-results+json']]);
+});
+
+$factories = [];
+foreach (require __DIR__.'/../plugins.php' as [, $class]) {
+    if (class_exists($class)) {
+        $factories[] = new $class($http ??= HttpClient::create(['timeout' => 90]));
+    }
+}
+$installed = array_map(static fn ($factory) => $factory->getName(), $factories);
+$config = array_filter(require __DIR__.'/../config/sources.php', static fn (array $source) => \in_array($source['factory'], $installed, true));
+$config = array_map(static fn (array $source) => ['factory' => $source['factory'], 'options' => array_filter($source['options'], static fn ($value) => null !== $value)], $config);
+if (isset($config['eurlex'])) {
+    // The metadata only: two calls, not the megabyte of the text itself.
+    $config['eurlex']['options'] = ['content' => false, 'throttle' => $recorded ? 0 : 0.5] + $config['eurlex']['options'];
+}
+$registry = new Registry($factories, $config);
+
+$report = ['recorded' => $recorded, 'sources' => [], 'text' => null];
+$usable = $registry->usable();
+foreach ($registry->names() as $name) {
+    $report['sources'][$name] = isset($usable[$name]) ? Capabilities::operations($usable[$name]) : null;
+}
+if ($registry->has('eurlex')) {
+    $text = $registry->texts('eurlex')->text('32016R0679', new DateTimeImmutable('2018-06-01'));
+    $day = static fn (?DateTimeImmutable $date) => $date?->format('Y-m-d');
+    $report['text'] = null === $text ? null : [
+        'id' => $text->id,
+        'title' => $text->title,
+        'type' => $text->type,
+        'date' => $day($text->date),
+        'in_force' => $text->isInForce(),
+        'version' => ['id' => $text->version?->id, 'from' => $day($text->version?->from), 'status' => $text->version?->status->value],
+        'versions' => array_map(static fn (Version $version) => $version->id, $text->versions),
+    ];
+}
+
+// What PHP loaded to get there: the proof that no framework was needed.
+$report['symbols'] = [...get_declared_classes(), ...get_declared_interfaces(), ...get_declared_traits()];
+$report['files'] = get_included_files();
+$framework = array_values(preg_grep('~^(?:Symfony\\\\Component\\\\(?:DependencyInjection|Config|HttpKernel|HttpFoundation)|Symfony\\\\Bundle|Doctrine|Twig)\\\\~', $report['symbols']));
+$symfony = array_values(array_unique(array_map(static fn (string $s) => implode('\\', \array_slice(explode('\\', $s), 0, 3)), preg_grep('~^Symfony\\\\(?!Polyfill)~', $report['symbols']))));
+sort($symfony);
+
+if (\in_array('--json', $argv, true)) {
+    echo json_encode($report, \JSON_PRETTY_PRINT | \JSON_UNESCAPED_SLASHES | \JSON_UNESCAPED_UNICODE), "\n";
+    exit($framework ? 1 : 0);
+}
+
+echo "Omnilex in bare PHP: the registry built by hand, no bundle, no container.\n\n";
+foreach ($report['sources'] as $name => $operations) {
+    printf("  %-14s %s\n", $name, null === $operations ? 'its credentials are not set' : implode(' ', $operations));
+}
+if (!$report['sources']) {
+    echo "  no omnilex/* source package is installed\n";
+}
+if ($text = $report['text']) {
+    echo "\nEUR-Lex, ", $text['id'], ' as in force on 2018-06-01', $recorded ? ', from the answers recorded on 2026-10-04' : ', asked of publications.europa.eu', ":\n";
+    printf("  %s\n  %s of %s, %s\n  version %s, from %s, %s (of %s)\n", $text['title'], $text['type'], $text['date'], $text['in_force'] ? 'in force' : 'not in force', $text['version']['id'], $text['version']['from'], $text['version']['status'], implode(', ', $text['versions']));
+}
+echo "\nLoaded from Symfony: ", implode(', ', $symfony) ?: 'nothing', "\n";
+echo 'Classes of a framework (DependencyInjection, Config, HttpKernel, HttpFoundation, a bundle, Doctrine, Twig): ', $framework ? implode(', ', $framework) : 'none', "\n";
+exit($framework ? 1 : 0);

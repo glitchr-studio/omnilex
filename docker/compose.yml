@@ -10,6 +10,7 @@
 #   docker compose run --rm omnilex recent administratif 2026-10-01 --jurisdiction CE
 #   docker compose run --rm omnilex article legifrance LEGITEXT000006070987 L36-11 --at 2018-01-01    # needs PISTE
 #   docker compose run --rm omnilex search judilibre expropriation --jurisdiction cc --from 2020-01-01  # needs PISTE
+#   docker compose run --rm omnilex bare                      # plain PHP: no bundle, no container, and what PHP loaded
 #   docker compose run --rm omnilex test                      # every package's tests
 #
 # Sources come from GitHub (branch 1.x) unless their checkout sits under

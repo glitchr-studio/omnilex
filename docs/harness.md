@@ -18,6 +18,7 @@ docker compose run --rm omnilex sources
 | `article <source> <id> [number]` | one article `--at` a day (JSON) |
 | `decision <source> <id>` | one decision (JSON; `--full`) |
 | `citations <source> <id>` | the links, both ways; `--limit` each way |
+| `bare` | plain PHP: the registry built by hand, a regulation as in force at a date asked of EUR-Lex, what PHP loaded |
 | `test` | every package's tests |
 
 `search` and `recent` take `--kind` (`text`, `article`, `decision`), `--jurisdiction`,
@@ -39,6 +40,38 @@ docker compose run --rm omnilex recent administratif 2026-10-01 --jurisdiction C
 docker compose run --rm omnilex article legifrance LEGITEXT000006070987 L36-11 --at 2018-01-01
 docker compose run --rm omnilex search judilibre expropriation --jurisdiction cc --from 2020-01-01
 ```
+
+## Bare: no bundle, no container
+
+The console above is a `symfony/console` application over a registry built by hand; `bare` is
+less still - one PHP script, `docker/harness/bin/bare`, that requires the autoloader and nothing
+else. It builds the `Registry` from the source packages installed, asks each source that can be
+built what it does, asks EUR-Lex for the regulation 32016R0679 as in force on 1 June 2018 - the
+real service, its metadata only, or with `--recorded` the answers kept in
+`docker/harness/recorded/` - then lists what PHP loaded and exits 1 if a class of a framework is
+among it (`Symfony\Component\DependencyInjection`, `Config`, `HttpKernel`, `HttpFoundation`, a
+bundle, Doctrine, Twig):
+
+```
+$ docker compose run --rm omnilex bare
+Omnilex in bare PHP: the registry built by hand, no bundle, no container.
+
+  legifrance     its credentials are not set
+  judilibre      its credentials are not set
+  eurlex         search text article decision citations recent
+  administratif  search decision recent
+
+EUR-Lex, 32016R0679 as in force on 2018-06-01, asked of publications.europa.eu:
+  Règlement (UE) 2016/679 du Parlement européen et du Conseil du 27 avril 2016 relatif à la protection des personnes physiques à l'égard du traitement des données à caractère personnel et à la libre circulation de ces données, et abrogeant la directive 95/46/CE (règlement général sur la protection des données) (Texte présentant de l'intérêt pour l'EEE)
+  REG of 2016-04-27, in force
+  version 02016R0679-20160504, from 2016-05-04, in_force (of 32016R0679, 02016R0679-20160504)
+
+Loaded from Symfony: Symfony\Component\HttpClient, Symfony\Contracts\HttpClient, Symfony\Contracts\Service
+Classes of a framework (DependencyInjection, Config, HttpKernel, HttpFoundation, a bundle, Doctrine, Twig): none
+```
+
+`bare --recorded --json` prints the same whole, every class and file loaded, without a call:
+`Tests/BareTest.php` runs it in a process of its own and checks the list.
 
 The image is `php:8.4-cli-alpine` with Composer; the harness's packages live in the `harness`
 volume of the `omnilex-harness` project. The sources are cloned from GitHub as plain git
