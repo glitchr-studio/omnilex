@@ -137,4 +137,4 @@ docker compose run --rm omnilex bare          # plain PHP: no bundle, no contain
 docker compose run --rm omnilex test
 ```
 
-License: LGPL-3.0-or-later.
+License: MIT since 2026-10-09; earlier versions remain published under LGPL-3.0-or-later.
